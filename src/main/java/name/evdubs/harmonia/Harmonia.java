@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.regex.Pattern;
+import java.text.DecimalFormat;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -71,9 +72,10 @@ public class Harmonia {
     Exchange bfx = ExchangeFactory.INSTANCE.createExchange(BitfinexExchange.class.getName());
 
     ExchangeSpecification bfxSpec = bfx.getDefaultExchangeSpecification();
-    String apiKey = "";
-    String secretKey = "";
+    String apiKey = System.getenv("HAR_KEY"); 
+    String secretKey = System.getenv("HAR_SEC"); 
 
+    /*
     try {
       System.out.print("API Key: ");
       System.out.flush();
@@ -90,6 +92,7 @@ public class Harmonia {
       e2.printStackTrace();
       System.exit(1);
     }
+    */
 
     bfxSpec.setApiKey(apiKey);
     bfxSpec.setSecretKey(secretKey);
@@ -104,6 +107,7 @@ public class Harmonia {
     BigDecimal minFunds = new BigDecimal("50"); // minimum amount needed (USD) to lend
     BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
     BigDecimal minRate = new BigDecimal("5"); // 5% per 365 days
+    BigDecimal ratio = new BigDecimal("0.998");
     double millisecondsInDay = 86400000.0;
 
     BigDecimal depositFunds = BigDecimal.ZERO;
@@ -155,7 +159,7 @@ public class Harmonia {
           if ("deposit".equalsIgnoreCase(balance.getType()) && "USD".equalsIgnoreCase(balance.getCurrency())) {
             if (depositFunds.compareTo(balance.getAmount()) == 0) {
               estimatedAccumulatedInterest = estimatedAccumulatedInterest + activeCreditInterest;
-              log.info("Estimated total accrued interest " + estimatedAccumulatedInterest);
+              log.info("Estimated total accrued interest " + String.format("%.2f", estimatedAccumulatedInterest));
             } else {
               double bfxFee = 0.0;
               if (estimatedAccumulatedInterest != 0.0) {
@@ -199,7 +203,8 @@ public class Harmonia {
           if (bidFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
 
             // Cancel existing orders and send new FRR order
-            cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+            //cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+            cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, frr.multiply(ratio), frr);
 
           } else { // flash return rate demanded by sellers, send a competitive fixed rate order
             BigDecimal bestAskOutsideBestBid = maxRate;
@@ -236,18 +241,21 @@ public class Harmonia {
             // If the best offer is FRR, just sit with everyone else
             if (bestAskFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
               // Cancel existing orders and send new FRR order
-              cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+              //cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+              cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, frr.multiply(ratio), frr);
 
             } else if (!bestAskFrr) {
               // Best ask is not FRR, we need to send a competitive fixed rate
-              log.info("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
+              // log.info("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
               if (bestAskOutsideBestBidAmount.compareTo(activeOfferAmount) == 0) {
                 // Don't stay out there alone
                 // Join second best ask outside of best bid
-                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, secondBestAskOutsideBestBid, frr);
+                //cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, secondBestAskOutsideBestBid, frr);
+                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, secondBestAskOutsideBestBid.multiply(ratio), frr);
               } else if (!matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, false, inactiveFunds, bestAskOutsideBestBid)) {
                 // Join best ask outside of best bid
-                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid, frr);
+                //cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid, frr);
+                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid.multiply(ratio), frr);
               } else {
                 log.info("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
               }
@@ -267,7 +275,7 @@ public class Harmonia {
       }
 
       try {
-        Thread.sleep(20000);
+        Thread.sleep(60000);
       } catch (InterruptedException e) {
         log.error(e);
       }
@@ -276,15 +284,15 @@ public class Harmonia {
 
   private static boolean matchesCurrentOrder(boolean currentFrr, BigDecimal currentAmount, BigDecimal currentRate, boolean newFrr, BigDecimal newAmount, BigDecimal newRate) {
 
-    log.info("Comparing currentFrr: " + currentFrr + " with newFrr: " + newFrr);
+    //log.info("Comparing currentFrr: " + currentFrr + " with newFrr: " + newFrr);
     if (currentFrr != newFrr)
       return false;
 
-    log.info("Comparing currentAmount: " + currentAmount + " with newAmount: " + newAmount);
+    //log.info("Comparing currentAmount: " + currentAmount + " with newAmount: " + newAmount);
     if (currentAmount.compareTo(newAmount) != 0)
       return false;
 
-    log.info("Comparing currentRate: " + currentRate + " with newRate: " + newRate);
+    //log.info("Comparing currentRate: " + currentRate + " with newRate: " + newRate);
     if (currentRate.compareTo(newRate) != 0)
       return false;
 
@@ -294,20 +302,22 @@ public class Harmonia {
   private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService, BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal frr)
       throws IOException {
     // Cancel existing orders
+    // log.info("is Frr: " + isFrr + " Rate: " + rate + " frr: " + frr);
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
         if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()))) {
-          log.info("Cancelling " + offer.toString());
+          //log.info("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
       }
     } else {
-      log.info("Found no previous order to cancel");
+      //log.info("Found no previous order to cancel");
     }
 
     if (isFrr) {
       FloatingRateLoanOrder order = new FloatingRateLoanOrder(OrderType.ASK, "USD", amount, 30, "", null, BigDecimal.ZERO);
-      log.info("Sending " + order.toString());
+      //log.info("Offer " + order.toString());
+      log.info("Offer " + order.getTradableAmount().toString() + " " + order.getCurrency().toString() + " @ FRR " + frr.doubleValue() / 365);
       tradeService.placeBitfinexFloatingRateLoanOrder(order, BitfinexOrderType.MARKET);
     } else {
       // Set the day period for somewhere between 2 and 30 days. We compare our order's rate to the flash return rate.
@@ -315,8 +325,11 @@ public class Harmonia {
       // determine how many days we should offer with a cap of 30 using: (ourRate - frr) / frr * 30
       int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
 
-      FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
-      log.info("Sending " + order.toString() + ", rate=" + rate);
+      //FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
+      FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, 30, "", null, rate);
+      DecimalFormat df = new DecimalFormat("#.00");
+      //log.info("Offer " + df.format(order.getTradableAmount()) + " " + order.getCurrency().toString() + " @ " + rate.doubleValue() / 365);
+      log.info("Offer " + String.format("%.2f",order.getTradableAmount()) + " " + order.getCurrency().toString() + " @ " + String.format("%.5f", rate.doubleValue() / 365) + " %/day");
       tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
     }
   }
