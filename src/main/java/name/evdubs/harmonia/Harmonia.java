@@ -125,6 +125,8 @@ public class Harmonia {
         BigDecimal activeCreditAmount = BigDecimal.ZERO;
         double activeCreditInterest = 0.0;
         BigDecimal frr = lends[0].getRate();
+        log.info("frr: " + frr + " " + frr.doubleValue() / 365);
+
 
         for (BitfinexCreditResponse credit : activeCredits) {
           if ("USD".equalsIgnoreCase(credit.getCurrency())) {
@@ -238,6 +240,10 @@ public class Harmonia {
               }
             }
 
+            // override all logic below becaue seomthing is wrong with it
+            cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, frr.multiply(ratio), frr);
+
+            /*
             // If the best offer is FRR, just sit with everyone else
             if (bestAskFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
               // Cancel existing orders and send new FRR order
@@ -262,6 +268,7 @@ public class Harmonia {
             } else {
               log.info("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
             }
+              */
           }
 
         } else {
